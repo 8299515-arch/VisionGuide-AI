@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 
+from ai.vision.pipeline import process_image
+
 app = FastAPI(
     title="VisionGuide AI API",
     description="Core API for VisionGuide AI - accessibility assistant for visually impaired users",
@@ -13,7 +15,7 @@ app = FastAPI(
 # --------------------
 
 class ImageRequest(BaseModel):
-    image: str  # base64 or URL in future
+    image: str
 
 class AnalysisResponse(BaseModel):
     objects: List[str] = []
@@ -39,9 +41,11 @@ def health():
 
 @app.post("/analyze-image", response_model=AnalysisResponse)
 def analyze_image(req: ImageRequest):
+    result = process_image(req.image)
+
     return AnalysisResponse(
-        objects=[],
-        text="",
-        description="VisionGuide AI mock response (Sprint 1)",
+        objects=result.get("objects", []),
+        text=result.get("text", ""),
+        description=result.get("description", ""),
         navigation_hint=""
     )
