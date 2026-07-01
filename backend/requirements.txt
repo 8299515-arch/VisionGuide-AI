@@ -7,3 +7,4 @@ opencv-python
 pillow
 easyocr
 ultralytics
+pyttsx3
