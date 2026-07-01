@@ -1,97 +1,63 @@
-from fastapi import FastAPI, WebSocket, HTTPException
-from pydantic import BaseModel
-from typing import List
-from jose import jwt, JWTError
+"""
+VisionGuide AI - v7 FINAL PRODUCT ENTRYPOINT
+Unified SaaS + AI orchestration layer
+"""
 
-from ai.vision.pipeline import process_image
-from backend.app.ws import websocket_endpoint
-from backend.app.metrics import metrics
-from backend.app.auth import authenticate_user, create_access_token, SECRET_KEY, ALGORITHM
+from fastapi import FastAPI, Request
+
+from backend.app.api_gateway import gateway
+from backend.app.services.v5_super_ai import super_ai
+from backend.app.services.v4_multimodal_brain import brain_v4
+from backend.app.services.vision_reasoning import engine as brain_v2
+
+from backend.app.payments import router as payments_router
+from backend.app.admin import router as admin_router
 
 app = FastAPI(
-    title="VisionGuide AI API",
-    description="Core API for VisionGuide AI - accessibility assistant for visually impaired users",
-    version="0.1.0"
+    title="VisionGuide AI",
+    version="7.0.0"
 )
 
-# --------------------
-# Models
-# --------------------
+# ----------------------------
+# Routers
+# ----------------------------
 
-class ImageRequest(BaseModel):
-    image: str
+app.include_router(payments_router)
+app.include_router(admin_router)
 
-class AnalysisResponse(BaseModel):
-    objects: List[str] = []
-    text: str = ""
-    description: str = ""
-    navigation_hint: str = ""
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-# --------------------
-# Routes
-# --------------------
+# ----------------------------
+# Health
+# ----------------------------
 
 @app.get("/")
 def root():
-    return {
-        "service": "VisionGuide AI Backend",
-        "status": "running",
-        "version": "0.1.0"
-    }
+    return {"status": "VisionGuide AI v7 running 🚀"}
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+# ----------------------------
+# Core AI Gateway Endpoint
+# ----------------------------
 
-@app.post("/login")
-def login(req: LoginRequest):
-    user = authenticate_user(req.username, req.password)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+@app.post("/ai")
+async def ai_endpoint(request: Request):
+    payload = await request.json()
 
-    token = create_access_token({"sub": user["username"]})
-    return {"access_token": token, "token_type": "bearer"}
+    gw = await gateway.handle_request(request, payload)
+    route = gw["route"]
 
-@app.get("/metrics")
-def get_metrics():
-    return {
-        "request_count": metrics.request_count,
-        "error_count": metrics.error_count,
-        "avg_latency": metrics.avg_latency(),
-        "endpoint_hits": dict(metrics.endpoint_hits)
-    }
+    if route == "vision_pipeline":
+        return brain_v2.reason(payload.get("vision", {}))
 
-@app.post("/analyze-image", response_model=AnalysisResponse)
-def analyze_image(req: ImageRequest):
-    result = process_image(req.image)
+    if route == "voice_pipeline":
+        return brain_v4.run(
+            payload.get("vision", {}),
+            audio=payload.get("audio"),
+            prompt=payload.get("prompt", "")
+        )
 
-    return AnalysisResponse(
-        objects=result.get("objects", []),
-        text=result.get("text", ""),
-        description=result.get("description", ""),
-        navigation_hint=""
+    if route == "stripe_pipeline":
+        return {"hint": "Use /payments/create-checkout-session"}
+
+    return super_ai.process(
+        user_input=payload.get("text", ""),
+        vision=payload.get("vision")
     )
-
-# --------------------
-# WebSocket (Sprint 5 secured)
-# --------------------
-
-@app.websocket("/ws")
-async def ws_endpoint(websocket: WebSocket):
-    token = websocket.query_params.get("token")
-
-    if not token:
-        await websocket.close(code=1008)
-        return
-
-    try:
-        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        await websocket.close(code=1008)
-        return
-
-    await websocket_endpoint(websocket)
