@@ -19,6 +19,17 @@ services:
     expose:
       - "8000"
 
+  worker:
+    build: ./backend
+    container_name: visionguide-worker
+    command: python -m backend.app.worker
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - db
+    restart: always
+
   nginx:
     image: nginx:alpine
     container_name: visionguide-nginx
