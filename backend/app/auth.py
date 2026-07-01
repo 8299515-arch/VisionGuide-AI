@@ -1,21 +1,43 @@
 """
 VisionGuide AI - Auth (Sprint 5)
-Simple JWT-based authentication layer
+Production-ready JWT auth layer (fixed)
 """
 
 from datetime import datetime, timedelta
 from typing import Optional
+import os
 
 from jose import jwt, JWTError
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from passlib.context import CryptContext
 
-SECRET_KEY = "CHANGE_ME_SUPER_SECRET"
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_SUPER_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 security = HTTPBearer()
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --------------------
+# Password utils
+# --------------------
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    return pwd_context.verify(password, hashed)
+
+# --------------------
+# JWT
+# --------------------
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -31,3 +53,23 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         return payload
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+# --------------------
+# Demo user store (Sprint 5 minimal)
+# --------------------
+
+fake_users_db = {
+    "admin": {
+        "username": "admin",
+        "hashed_password": hash_password("admin123")
+    }
+}
+
+
+def authenticate_user(username: str, password: str):
+    user = fake_users_db.get(username)
+    if not user:
+        return False
+    if not verify_password(password, user["hashed_password"]):
+        return False
+    return user
