@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from pydantic import BaseModel
 from typing import List
 
 from ai.vision.pipeline import process_image
+from backend.app.ws import websocket_endpoint
 
 app = FastAPI(
     title="VisionGuide AI API",
@@ -49,3 +50,11 @@ def analyze_image(req: ImageRequest):
         description=result.get("description", ""),
         navigation_hint=""
     )
+
+# --------------------
+# WebSocket (Sprint 3)
+# --------------------
+
+@app.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket):
+    await websocket_endpoint(websocket)
