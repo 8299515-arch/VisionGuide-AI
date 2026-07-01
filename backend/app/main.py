@@ -1,10 +1,12 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from typing import List
+from jose import jwt, JWTError
 
 from ai.vision.pipeline import process_image
 from backend.app.ws import websocket_endpoint
 from backend.app.metrics import metrics
+from backend.app.auth import authenticate_user, create_access_token, SECRET_KEY, ALGORITHM
 
 app = FastAPI(
     title="VisionGuide AI API",
@@ -25,6 +27,10 @@ class AnalysisResponse(BaseModel):
     description: str = ""
     navigation_hint: str = ""
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 # --------------------
 # Routes
 # --------------------
@@ -40,6 +46,15 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.post("/login")
+def login(req: LoginRequest):
+    user = authenticate_user(req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token({"sub": user["username"]})
+    return {"access_token": token, "token_type": "bearer"}
 
 @app.get("/metrics")
 def get_metrics():
@@ -62,9 +77,21 @@ def analyze_image(req: ImageRequest):
     )
 
 # --------------------
-# WebSocket (Sprint 3)
+# WebSocket (Sprint 5 secured)
 # --------------------
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+
+    if not token:
+        await websocket.close(code=1008)
+        return
+
+    try:
+        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        await websocket.close(code=1008)
+        return
+
     await websocket_endpoint(websocket)
