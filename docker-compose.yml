@@ -24,11 +24,22 @@ services:
     container_name: visionguide-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
     depends_on:
       - backend
     restart: always
+
+  certbot:
+    image: certbot/certbot
+    container_name: visionguide-certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done'"
 
   db:
     image: postgres:15
@@ -52,3 +63,5 @@ services:
 
 volumes:
   pgdata:
+  certbot-etc:
+  certbot-www:
