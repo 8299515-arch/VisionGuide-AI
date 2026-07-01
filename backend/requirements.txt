@@ -8,3 +8,6 @@ pillow
 easyocr
 ultralytics
 pyttsx3
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
