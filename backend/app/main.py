@@ -4,6 +4,7 @@ from typing import List
 
 from ai.vision.pipeline import process_image
 from backend.app.ws import websocket_endpoint
+from backend.app.metrics import metrics
 
 app = FastAPI(
     title="VisionGuide AI API",
@@ -39,6 +40,15 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/metrics")
+def get_metrics():
+    return {
+        "request_count": metrics.request_count,
+        "error_count": metrics.error_count,
+        "avg_latency": metrics.avg_latency(),
+        "endpoint_hits": dict(metrics.endpoint_hits)
+    }
 
 @app.post("/analyze-image", response_model=AnalysisResponse)
 def analyze_image(req: ImageRequest):
